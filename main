@@ -1,0 +1,229 @@
+import pygame,random,time
+
+
+# User-defined functions
+
+def main():
+   # initialize all pygame modules (some need initialization)
+   pygame.init()
+   # create a pygame display window
+   pygame.display.set_mode((500, 400))
+   # set the title of the display window
+   pygame.display.set_caption('Memory')   
+   # get the display surface
+   w_surface = pygame.display.get_surface() 
+   # create a game object
+   game = Game(w_surface)
+   # start the main game loop by calling the play method on the game object
+   game.play() 
+   # quit pygame and clean up the pygame window
+   pygame.quit() 
+
+
+# User-defined classes
+
+class Game:
+   # An object in this class represents a complete game.
+
+   def __init__(self, surface):
+      # Initialize a Game.
+      # - self is the Game to initialize
+      # - surface is the display window surface object
+
+      # === objects that are part of every game that we will discuss
+      self.surface = surface
+      self.bg_color = pygame.Color('black')
+      
+      self.FPS = 60
+      self.gameClock = pygame.time.Clock()
+      self.close_clicked = False
+      self.continue_game = True
+      
+      # === game specific objects
+      self.board_size = 4
+      self.image_list = [] # this will hold the 8 images 
+      self.load_images()
+      self.board = [] # will be represented by a list of lists
+      self.create_board()
+      self.clicked_list = []
+      self.exposed_list = []
+      self.score = 0
+
+   
+   def load_images(self):
+      # -self is the game object
+      # -creates a list of 16 images which are then shuffled
+      
+      for i in range(1,9):
+         image = pygame.image.load('image' + str(i) + '.bmp')
+         self.image_list.append(image) 
+
+
+      self.image_list = self.image_list + self.image_list # makes a copy of the 8 images loaded in the list so it now becomes a total of 16 images in the list
+      
+      random.shuffle(self.image_list) # randomly shuffles images in the list
+    
+   
+   def create_board(self):
+      # -self is a game object
+      # -looping to create a board with 16 Tile objects using row_index and col_index
+      i = 0
+      for row_index in range(0,self.board_size): # row_index ---> [0,1,2,3]
+         row = []
+         for col_index in range(0,self.board_size): # col_index ---> [0,1,2,3]
+            image = self.image_list[i]
+            width = image.get_width() # image is a Surface object
+            height = image.get_height()
+            x = col_index * width
+            y = row_index * height
+            tile = Tile(x,y,width,height,image,self.surface) # creating tile object
+            row.append(tile)
+            i = i + 1
+         self.board.append(row)
+      
+         
+   def play(self):
+      # Play the game until the player presses the close box.
+      # - self is the Game that should be continued or not.
+
+      while not self.close_clicked:  # until player clicks close box
+         # play frame
+         self.handle_events()
+         self.draw()            
+         if self.continue_game:
+            self.update()
+            self.decide_continue()
+         self.gameClock.tick(self.FPS) # run at most with FPS Frames Per Second 
+
+   def handle_events(self):
+      # Handle each user event by changing the game state appropriately.
+      # - self is the Game whose events will be handled
+
+      events = pygame.event.get()
+      for event in events:
+         if event.type == pygame.QUIT:
+            self.close_clicked = True
+         if event.type == pygame.MOUSEBUTTONUP and self.continue_game:
+            self.handle_mouse_up(event.pos)
+   
+   def handle_mouse_up(self,pos):
+      # -position is bound to the object that event.pos is bound
+      # -position is the (x,y) location of the click   
+      # -loops through each tile and checks if the click is within it by calling the select method of the Tile class
+      # -if True the tile is appended into self.checked_list
+      
+      for row in self.board:
+         for tile in row:
+            if tile.select(pos):
+               self.clicked_list.append(tile)
+                  
+                     
+   def draw_score(self):
+      # draws score
+      # step 1: create font object
+      font = pygame.font.SysFont('',70)
+      # render the font to create a text image
+      text_image = font.render(str(self.score),True,pygame.Color('white'),self.bg_color)
+      # compute the location
+      location = (self.surface.get_width() - text_image.get_width(),0)
+      # blit the text_image
+      self.surface.blit(text_image,location)   
+              
+   
+   def draw(self):
+      # Draw all game objects.
+      # - self is the Game to draw
+      
+      self.surface.fill(self.bg_color) # clear the display surface first
+      # draw the board
+      self.draw_score()
+      for row in self.board:
+         for tile in row:
+            tile.draw()
+            
+      pygame.display.update() # make the updated surface appear on the display
+      
+   
+   def update(self):
+      # Update the game objects for the next frame.
+      # - self is the Game to update
+      
+      
+     # assigns self.score which was intiallized to 0 to go up every second
+      self.score = pygame.time.get_ticks()//1000  # gets time in milliseconds and then it's divided by 1000 to get it's value in seconds
+
+      if len(self.clicked_list) == 2:
+         if self.clicked_list[0] == self.clicked_list[1]: # checks if the images are the same
+            # if True, calls the show_tile() function on both tiles
+            self.clicked_list[0].set_show_tile()
+            self.clicked_list[1].set_show_tile()
+            # appends the value of the exposed tiles into a list in order to keep track of them for end game conditions
+            self.exposed_list.append(self.clicked_list[0])
+            self.exposed_list.append(self.clicked_list[1])
+            self.clicked_list.clear()   # clears the list 
+         elif self.clicked_list[0] != self.clicked_list[1]:
+            # if True, sleep for 0.5 seconds and then call the hide_tile() function on both tiles
+            time.sleep(0.5)
+            self.clicked_list[0].set_hide_tile()
+            self.clicked_list[1].set_hide_tile()
+            self.clicked_list.clear()  # clears the list         
+         
+      
+        
+
+   def decide_continue(self):
+      # Check and remember if the game should continue
+      # -self is the Game to check
+      # - if all images are exposed, game is over
+      if len(self.exposed_list) == 16:
+         self.continue_game = False
+      
+
+class Tile:
+   # an object in this class represents a Tile object
+   
+   def __init__(self,x,y,width,height,image,surface):
+      self.rect = pygame.Rect(x,y,width,height)
+      self.color = pygame.Color('black')
+      self.border_width= 3
+      self.hidden_image = pygame.image.load('image0.bmp')  # question mark image
+      self.hidden = True
+      self.content = image
+      self.surface = surface
+      
+   def draw(self):
+      # -self is the Paddle object to draw
+     
+      location = (self.rect.x,self.rect.y) # assigns the location to a tuple of the coordinates of the tile
+      
+      if self.hidden == True:
+         self.surface.blit(self.hidden_image,location) # if True, blit the hidden_image
+      else:
+         self.surface.blit(self.content,location)  # if False, blit the one of the other images
+      pygame.draw.rect(self.surface,self.color,self.rect, self.border_width)
+   
+      
+   def set_show_tile(self):
+      # sets self.hidden to False
+      self.hidden = False
+   
+   def set_hide_tile(self):
+      # sets self.hidden to True
+      self.hidden = True
+
+   def select(self,position):
+      # -self is a Tile object
+      # -position is the (x,y) location of the click
+      if self.rect.collidepoint(position) and self.hidden == True : # is there a click and is the tile hidden?
+         self.hidden = False # shows image
+         return True
+      else:
+         return False
+   
+   def __eq__(self,other):
+      # -self is a Tile object
+      # -other is a Tile object
+      # -automatically called when using '==' operator which allows images to be compared
+      return self.content == other.content 
+
+main()
